@@ -72,14 +72,32 @@ serve(async (req) => {
     const ktagData = await ktagResponse.json();
     console.log('K-Tag API response:', ktagData);
 
-    // Interpretar resposta da API K-Tag
-    // A resposta geralmente contém: latitude, longitude, confidence, timestamp
+    // Interpretar resposta corretamente - a API retorna um array 'results'
+    const results = ktagData.results || [];
+    
+    if (!results || results.length === 0) {
+      console.log('No results returned from K-Tag API');
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Nenhuma localização disponível',
+          rawResponse: ktagData 
+        }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Pegar o resultado mais recente (primeiro do array)
+    const latestReport = results[0];
+    
     const location = {
-      latitude: ktagData.latitude || ktagData.lat || null,
-      longitude: ktagData.longitude || ktagData.lng || ktagData.lon || null,
-      confidence: ktagData.confidence || null,
-      status_code: ktagData.status || ktagData.statusCode || null,
-      timestamp: ktagData.timestamp || new Date().toISOString(),
+      latitude: latestReport.lat || null,
+      longitude: latestReport.lon || null,
+      confidence: latestReport.conf || null,
+      status_code: latestReport.status || null,
+      timestamp: latestReport.timestamp 
+        ? new Date(latestReport.timestamp).toISOString() 
+        : new Date().toISOString(),
     };
 
     console.log('Parsed location:', location);

@@ -4,9 +4,13 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapComponent } from "@/components/MapComponent";
+import { MapboxMap } from "@/components/maps/MapboxMap";
+import { GoogleMap } from "@/components/maps/GoogleMap";
+import { LeafletMap } from "@/components/maps/LeafletMap";
 import { ArrowLeft, MapPin, Clock, Signal, RefreshCw, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
+
+type MapProvider = "mapbox" | "google" | "openstreetmap";
 
 export default function TagDetails() {
   const { id } = useParams();
@@ -14,6 +18,20 @@ export default function TagDetails() {
   const [location, setLocation] = useState<any>(null);
   const [loading, setLoading] = useState(true);
   const [updating, setUpdating] = useState(false);
+  const [provider, setProvider] = useState<MapProvider>("mapbox");
+  const [apiKeys, setApiKeys] = useState({ mapbox: "", google: "" });
+
+  useEffect(() => {
+    const saved = localStorage.getItem("mapSettings");
+    if (saved) {
+      const settings = JSON.parse(saved);
+      setProvider(settings.provider || "mapbox");
+      setApiKeys({
+        mapbox: settings.mapboxKey || "",
+        google: settings.googleKey || "",
+      });
+    }
+  }, []);
 
   const fetchTag = async () => {
     if (!id) return;
@@ -255,11 +273,29 @@ export default function TagDetails() {
               <CardTitle>Localização no Mapa</CardTitle>
             </CardHeader>
             <CardContent>
-              <MapComponent
-                latitude={location.latitude}
-                longitude={location.longitude}
-                markerTitle={tag.name}
-              />
+              {provider === "mapbox" && (
+                <MapboxMap
+                  latitude={location.latitude}
+                  longitude={location.longitude}
+                  markerTitle={tag.name}
+                  apiKey={apiKeys.mapbox}
+                />
+              )}
+              {provider === "google" && (
+                <GoogleMap
+                  latitude={location.latitude}
+                  longitude={location.longitude}
+                  markerTitle={tag.name}
+                  apiKey={apiKeys.google}
+                />
+              )}
+              {provider === "openstreetmap" && (
+                <LeafletMap
+                  latitude={location.latitude}
+                  longitude={location.longitude}
+                  markerTitle={tag.name}
+                />
+              )}
             </CardContent>
           </Card>
         )}

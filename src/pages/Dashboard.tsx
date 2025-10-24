@@ -1,4 +1,6 @@
 import { useEffect, useState } from "react";
+import { useNavigate } from "react-router-dom";
+import { useAuth } from "@/contexts/AuthContext";
 import { supabase } from "@/integrations/supabase/client";
 import { TagCard } from "@/components/TagCard";
 import { TagForm } from "@/components/TagForm";
@@ -7,6 +9,8 @@ import { Activity, MapPin, Tags } from "lucide-react";
 import { toast } from "sonner";
 
 export default function Dashboard() {
+  const { user } = useAuth();
+  const navigate = useNavigate();
   const [tags, setTags] = useState<any[]>([]);
   const [loading, setLoading] = useState(true);
   const [stats, setStats] = useState({
@@ -14,6 +18,13 @@ export default function Dashboard() {
     active: 0,
     inactive: 0,
   });
+
+  
+  useEffect(() => {
+    if (!user) {
+      navigate("/auth");
+    }
+  }, [user, navigate]);
 
   const fetchTags = async () => {
     setLoading(true);
