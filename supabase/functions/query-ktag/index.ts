@@ -13,7 +13,7 @@ serve(async (req) => {
   }
 
   try {
-    // Validate authentication
+    // Verify authentication
     const authHeader = req.headers.get('authorization');
     if (!authHeader) {
       return new Response(
@@ -37,9 +37,10 @@ serve(async (req) => {
       }
     );
 
-    // Verificar autenticação do usuário
+    // Verify user authentication
     const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
     if (authError || !user) {
+      console.error('Authentication failed:', authError);
       return new Response(
         JSON.stringify({ error: 'Unauthorized' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -61,8 +62,9 @@ serve(async (req) => {
       );
     }
 
-    // Verificar propriedade da tag
+    // Verify tag ownership
     if (tag.user_id !== user.id) {
+      console.error('Unauthorized access attempt for tag:', tagId);
       return new Response(
         JSON.stringify({ error: 'Acesso negado' }),
         { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

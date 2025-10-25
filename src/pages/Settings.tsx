@@ -1,4 +1,4 @@
-import { useState, useEffect } from "react";
+import { useState } from "react";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Label } from "@/components/ui/label";
 import { Input } from "@/components/ui/input";
@@ -17,8 +17,8 @@ type MapSettings = {
 
 const DEFAULT_SETTINGS: MapSettings = {
   provider: "openstreetmap",
-  mapboxKey: import.meta.env.VITE_MAPBOX_KEY || "",
-  googleKey: import.meta.env.VITE_GOOGLE_MAPS_KEY || "",
+  mapboxKey: import.meta.env.VITE_MAPBOX_API_KEY || "",
+  googleKey: "",
 };
 
 export default function Settings() {
