@@ -71,8 +71,13 @@ export default function TagDetails() {
 
     setUpdating(true);
     try {
+      const { data: { session } } = await supabase.auth.getSession();
+      
       const { data, error } = await supabase.functions.invoke("query-ktag", {
         body: { tagId: id },
+        headers: {
+          Authorization: `Bearer ${session?.access_token}`
+        }
       });
 
       if (error) throw error;

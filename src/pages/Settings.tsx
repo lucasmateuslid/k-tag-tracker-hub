@@ -16,9 +16,9 @@ type MapSettings = {
 };
 
 const DEFAULT_SETTINGS: MapSettings = {
-  provider: "mapbox",
-  mapboxKey: "pk.eyJ1IjoidnJhc3RybyIsImEiOiJjazM3bTJyeW8wMDdnM2Juc2Y5bXo4bnQ0In0.VqqhpujyKeFTrz2lptuAuw",
-  googleKey: "AIzaSyBzocokEpr0kJiLdM5mGCcZc2pTKpQLGpc",
+  provider: "openstreetmap",
+  mapboxKey: import.meta.env.VITE_MAPBOX_KEY || "",
+  googleKey: import.meta.env.VITE_GOOGLE_MAPS_KEY || "",
 };
 
 export default function Settings() {

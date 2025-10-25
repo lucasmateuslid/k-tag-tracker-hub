@@ -13,15 +13,38 @@ serve(async (req) => {
   }
 
   try {
+    // Validate authentication
+    const authHeader = req.headers.get('authorization');
+    if (!authHeader) {
+      return new Response(
+        JSON.stringify({ error: 'Missing authorization header' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     const { tagId } = await req.json();
     
     console.log('Query K-Tag API for tag:', tagId);
 
-    // Criar cliente Supabase
+    // Criar cliente Supabase com auth header
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
+      {
+        global: {
+          headers: { Authorization: authHeader }
+        }
+      }
     );
+
+    // Verificar autenticação do usuário
+    const { data: { user }, error: authError } = await supabaseClient.auth.getUser();
+    if (authError || !user) {
+      return new Response(
+        JSON.stringify({ error: 'Unauthorized' }),
+        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
     // Buscar informações da tag
     const { data: tag, error: tagError } = await supabaseClient
@@ -38,11 +61,19 @@ serve(async (req) => {
       );
     }
 
+    // Verificar propriedade da tag
+    if (tag.user_id !== user.id) {
+      return new Response(
+        JSON.stringify({ error: 'Acesso negado' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     console.log('Tag found:', tag.name);
 
     // Chamar API K-Tag
     const ktagApiUrl = 'http://47.113.127.14:6176';
-    const authHeader = 'Basic ' + btoa('TagLocation:a9B3xQ7z');
+    const ktagAuthHeader = 'Basic ' + btoa('TagLocation:a9B3xQ7z');
 
     const payload = {
       accessoryId: tag.accessory_id,
@@ -55,7 +86,7 @@ serve(async (req) => {
     const ktagResponse = await fetch(ktagApiUrl, {
       method: 'POST',
       headers: {
-        'Authorization': authHeader,
+        'Authorization': ktagAuthHeader,
         'Content-Type': 'application/json',
       },
       body: JSON.stringify(payload),

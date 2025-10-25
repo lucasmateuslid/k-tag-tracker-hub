@@ -22,7 +22,16 @@ export function TagForm({ onSuccess }: { onSuccess?: () => void }) {
     setLoading(true);
 
     try {
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      if (!user) {
+        toast.error("Você precisa estar logado para criar tags");
+        setLoading(false);
+        return;
+      }
+
       const { error } = await supabase.from("tags").insert({
+        user_id: user.id,
         name: formData.name,
         accessory_id: formData.accessoryId,
         hashed_adv_key: formData.hashedAdvKey,
@@ -37,7 +46,6 @@ export function TagForm({ onSuccess }: { onSuccess?: () => void }) {
       setOpen(false);
       onSuccess?.();
     } catch (error) {
-      console.error("Error creating tag:", error);
       toast.error("Erro ao cadastrar tag");
     } finally {
       setLoading(false);

@@ -65,6 +65,7 @@ export type Database = {
           private_key: string
           status: string | null
           updated_at: string
+          user_id: string | null
         }
         Insert: {
           accessory_id: string
@@ -75,6 +76,7 @@ export type Database = {
           private_key: string
           status?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Update: {
           accessory_id?: string
@@ -85,6 +87,7 @@ export type Database = {
           private_key?: string
           status?: string | null
           updated_at?: string
+          user_id?: string | null
         }
         Relationships: []
       }
