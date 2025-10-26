@@ -4,9 +4,8 @@ import { supabase } from "@/integrations/supabase/client";
 import { Button } from "@/components/ui/button";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Badge } from "@/components/ui/badge";
-import { MapboxMap } from "@/components/maps/MapboxMap";
-import { GoogleMap } from "@/components/maps/GoogleMap";
-import { LeafletMap } from "@/components/maps/LeafletMap";
+import { ImprovedMapContainer } from "@/components/maps/ImprovedMapContainer";
+import { ShareLocationDialog } from "@/components/ShareLocationDialog";
 import { ArrowLeft, MapPin, Clock, Signal, RefreshCw, ExternalLink } from "lucide-react";
 import { toast } from "sonner";
 
@@ -167,18 +166,26 @@ export default function TagDetails() {
               </h1>
               <p className="text-muted-foreground mt-2">ID: {tag.accessory_id}</p>
             </div>
-            <div className="flex gap-3 items-center">
+            <div className="flex gap-3 items-center flex-wrap">
               <Badge className={statusColors[tag.status as keyof typeof statusColors]}>
                 {tag.status}
               </Badge>
               <Button
                 onClick={updateLocation}
                 disabled={updating}
-                className="bg-gradient-primary"
+                className="bg-gradient-primary hover:opacity-90 transition-opacity"
               >
                 <RefreshCw className={`mr-2 h-4 w-4 ${updating ? 'animate-spin' : ''}`} />
                 {updating ? 'Atualizando...' : 'Atualizar Agora'}
               </Button>
+              {location && (
+                <ShareLocationDialog
+                  tagId={tag.id}
+                  tagName={tag.name}
+                  latitude={location.latitude}
+                  longitude={location.longitude}
+                />
+              )}
             </div>
           </div>
         </div>
@@ -278,29 +285,15 @@ export default function TagDetails() {
               <CardTitle>Localização no Mapa</CardTitle>
             </CardHeader>
             <CardContent>
-              {provider === "mapbox" && (
-                <MapboxMap
-                  latitude={location.latitude}
-                  longitude={location.longitude}
-                  markerTitle={tag.name}
-                  apiKey={apiKeys.mapbox}
-                />
-              )}
-              {provider === "google" && (
-                <GoogleMap
-                  latitude={location.latitude}
-                  longitude={location.longitude}
-                  markerTitle={tag.name}
-                  apiKey={apiKeys.google}
-                />
-              )}
-              {provider === "openstreetmap" && (
-                <LeafletMap
-                  latitude={location.latitude}
-                  longitude={location.longitude}
-                  markerTitle={tag.name}
-                />
-              )}
+              <ImprovedMapContainer
+                latitude={location.latitude}
+                longitude={location.longitude}
+                markerTitle={tag.name}
+                preferredProvider={provider}
+                mapboxKey={apiKeys.mapbox}
+                googleKey={apiKeys.google}
+                zoom={15}
+              />
             </CardContent>
           </Card>
         )}

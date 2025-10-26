@@ -55,39 +55,72 @@ export type Database = {
           },
         ]
       }
+      profiles: {
+        Row: {
+          created_at: string | null
+          full_name: string | null
+          id: string
+          phone: string | null
+          updated_at: string | null
+          user_id: string
+        }
+        Insert: {
+          created_at?: string | null
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          updated_at?: string | null
+          user_id: string
+        }
+        Update: {
+          created_at?: string | null
+          full_name?: string | null
+          id?: string
+          phone?: string | null
+          updated_at?: string | null
+          user_id?: string
+        }
+        Relationships: []
+      }
       tags: {
         Row: {
           accessory_id: string
           created_at: string
           hashed_adv_key: string
           id: string
+          license_plate: string | null
           name: string
           private_key: string
           status: string | null
           updated_at: string
           user_id: string | null
+          vehicle_type: string | null
         }
         Insert: {
           accessory_id: string
           created_at?: string
           hashed_adv_key: string
           id?: string
+          license_plate?: string | null
           name: string
           private_key: string
           status?: string | null
           updated_at?: string
           user_id?: string | null
+          vehicle_type?: string | null
         }
         Update: {
           accessory_id?: string
           created_at?: string
           hashed_adv_key?: string
           id?: string
+          license_plate?: string | null
           name?: string
           private_key?: string
           status?: string | null
           updated_at?: string
           user_id?: string | null
+          vehicle_type?: string | null
         }
         Relationships: []
       }

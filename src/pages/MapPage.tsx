@@ -1,9 +1,7 @@
 import { useEffect, useState } from "react";
 import { supabase } from "@/integrations/supabase/client";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { MapboxMap } from "@/components/maps/MapboxMap";
-import { GoogleMap } from "@/components/maps/GoogleMap";
-import { LeafletMap } from "@/components/maps/LeafletMap";
+import { ImprovedMapContainer } from "@/components/maps/ImprovedMapContainer";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Badge } from "@/components/ui/badge";
 import { MapPin } from "lucide-react";
@@ -73,28 +71,23 @@ export default function MapPage() {
       );
     }
 
-    const props = {
-      latitude: location.latitude,
-      longitude: location.longitude,
-      markerTitle: tags.find((t) => t.id === selectedTag)?.name,
-    };
-
-    switch (provider) {
-      case "mapbox":
-        return <MapboxMap {...props} apiKey={apiKeys.mapbox} />;
-      case "google":
-        return <GoogleMap {...props} apiKey={apiKeys.google} />;
-      case "openstreetmap":
-        return <LeafletMap {...props} />;
-      default:
-        return null;
-    }
+    return (
+      <ImprovedMapContainer
+        latitude={location.latitude}
+        longitude={location.longitude}
+        markerTitle={tags.find((t) => t.id === selectedTag)?.name}
+        preferredProvider={provider}
+        mapboxKey={apiKeys.mapbox}
+        googleKey={apiKeys.google}
+        zoom={15}
+      />
+    );
   };
 
   return (
     <div className="container mx-auto px-4 py-8">
       <h1 className="text-4xl font-bold bg-gradient-primary bg-clip-text text-transparent mb-8">
-        Visualização no Mapa
+        Gerenciamento de Tags - Visualização no Mapa
       </h1>
 
       <div className="grid gap-6">

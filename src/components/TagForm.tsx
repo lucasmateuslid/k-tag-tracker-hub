@@ -3,6 +3,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogTrigger } from "@/components/ui/dialog";
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
 import { Plus } from "lucide-react";
 import { toast } from "sonner";
 import { supabase } from "@/integrations/supabase/client";
@@ -14,7 +15,9 @@ export function TagForm({ onSuccess }: { onSuccess?: () => void }) {
     name: "",
     accessoryId: "",
     hashedAdvKey: "",
-    privateKey: ""
+    privateKey: "",
+    vehicleType: "",
+    licensePlate: "",
   });
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -36,13 +39,22 @@ export function TagForm({ onSuccess }: { onSuccess?: () => void }) {
         accessory_id: formData.accessoryId,
         hashed_adv_key: formData.hashedAdvKey,
         private_key: formData.privateKey,
+        vehicle_type: formData.vehicleType || null,
+        license_plate: formData.licensePlate || null,
         status: 'active'
       });
 
       if (error) throw error;
 
       toast.success("Tag cadastrada com sucesso!");
-      setFormData({ name: "", accessoryId: "", hashedAdvKey: "", privateKey: "" });
+      setFormData({ 
+        name: "", 
+        accessoryId: "", 
+        hashedAdvKey: "", 
+        privateKey: "",
+        vehicleType: "",
+        licensePlate: ""
+      });
       setOpen(false);
       onSuccess?.();
     } catch (error) {
@@ -55,12 +67,12 @@ export function TagForm({ onSuccess }: { onSuccess?: () => void }) {
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
-        <Button className="bg-gradient-primary hover:opacity-90">
+        <Button className="bg-gradient-primary hover:opacity-90 transition-opacity">
           <Plus className="mr-2 h-4 w-4" />
           Nova Tag
         </Button>
       </DialogTrigger>
-      <DialogContent className="sm:max-w-[500px]">
+      <DialogContent className="sm:max-w-[550px] max-h-[90vh] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Cadastrar Nova Tag K-Tag</DialogTitle>
         </DialogHeader>
@@ -71,10 +83,44 @@ export function TagForm({ onSuccess }: { onSuccess?: () => void }) {
               id="name"
               value={formData.name}
               onChange={(e) => setFormData({ ...formData, name: e.target.value })}
-              placeholder="Ex: Mochila Principal"
+              placeholder="Ex: Rastreador Principal"
               required
             />
           </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label htmlFor="vehicleType">Tipo de Veículo</Label>
+              <Select
+                value={formData.vehicleType}
+                onValueChange={(value) => setFormData({ ...formData, vehicleType: value })}
+              >
+                <SelectTrigger id="vehicleType">
+                  <SelectValue placeholder="Selecione o tipo" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="carro">Carro</SelectItem>
+                  <SelectItem value="moto">Moto</SelectItem>
+                  <SelectItem value="caminhao">Caminhão</SelectItem>
+                  <SelectItem value="van">Van</SelectItem>
+                  <SelectItem value="onibus">Ônibus</SelectItem>
+                  <SelectItem value="outro">Outro</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
+            <div className="space-y-2">
+              <Label htmlFor="licensePlate">Placa do Veículo</Label>
+              <Input
+                id="licensePlate"
+                value={formData.licensePlate}
+                onChange={(e) => setFormData({ ...formData, licensePlate: e.target.value.toUpperCase() })}
+                placeholder="ABC-1234"
+                maxLength={8}
+              />
+            </div>
+          </div>
+
           <div className="space-y-2">
             <Label htmlFor="accessoryId">Accessory ID</Label>
             <Input
@@ -99,6 +145,7 @@ export function TagForm({ onSuccess }: { onSuccess?: () => void }) {
             <Label htmlFor="privateKey">Private Key</Label>
             <Input
               id="privateKey"
+              type="password"
               value={formData.privateKey}
               onChange={(e) => setFormData({ ...formData, privateKey: e.target.value })}
               placeholder="Chave privada"
@@ -109,7 +156,7 @@ export function TagForm({ onSuccess }: { onSuccess?: () => void }) {
             <Button type="button" variant="outline" onClick={() => setOpen(false)}>
               Cancelar
             </Button>
-            <Button type="submit" disabled={loading} className="bg-gradient-primary">
+            <Button type="submit" disabled={loading} className="bg-gradient-primary hover:opacity-90 transition-opacity">
               {loading ? "Salvando..." : "Cadastrar"}
             </Button>
           </div>
