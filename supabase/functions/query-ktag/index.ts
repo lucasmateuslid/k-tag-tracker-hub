@@ -221,7 +221,29 @@ serve(async (req) => {
     // Validate key formats
     if (!tag.hashed_adv_key || !tag.private_key) {
       return new Response(
-        JSON.stringify({ error: 'Chaves da tag inválidas ou ausentes' }),
+        JSON.stringify({ 
+          success: false,
+          message: 'Chaves da tag inválidas ou ausentes',
+          details: {
+            reason: 'invalid_keys',
+            suggestion: 'As chaves de criptografia estão ausentes ou em formato inválido.'
+          }
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Validate Base64 format of keys
+    if (!isValidBase64(tag.hashed_adv_key) || !isValidBase64(tag.private_key)) {
+      return new Response(
+        JSON.stringify({ 
+          success: false,
+          message: 'Formato de chaves inválido',
+          details: {
+            reason: 'invalid_keys',
+            suggestion: 'As chaves de criptografia devem estar em formato Base64 válido.'
+          }
+        }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
@@ -277,21 +299,32 @@ serve(async (req) => {
 
     const ktagData = await ktagResponse.json();
     
-    if (VERBOSE_LOGS) {
-      console.log('K-Tag API response received');
-    }
+    console.log('K-Tag API response received');
+    console.log('K-Tag API full response:', JSON.stringify(ktagData));
 
     // Parse response
     const results = ktagData.results || [];
     
     if (!results || results.length === 0) {
       console.log('No results returned from K-Tag API');
+      
+      // Calculate how long ago the tag was created
+      const tagAge = Date.now() - new Date(tag.created_at).getTime();
+      const tagAgeHours = Math.floor(tagAge / (1000 * 60 * 60));
+      
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Nenhuma localização disponível'
+          message: 'Tag não detectada ainda',
+          details: {
+            reason: 'no_reports',
+            tagAgeHours,
+            suggestion: tagAgeHours < 24 
+              ? 'Tags recém-criadas podem levar algumas horas para serem detectadas pela primeira vez.'
+              : 'Verifique se a tag está ativa e em uma área com dispositivos Apple próximos.'
+          }
         }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' }, status: 200 }
       );
     }
 
