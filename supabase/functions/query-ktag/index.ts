@@ -6,6 +6,88 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
+// Cache duration in milliseconds (5 minutes)
+const CACHE_DURATION_MS = 5 * 60 * 1000;
+
+// Rate limiting: max calls per tag per minute
+const RATE_LIMIT_DURATION_MS = 60 * 1000;
+
+// Retry configuration
+const MAX_RETRIES = 3;
+const RETRY_DELAY_MS = 1000;
+
+// Enable verbose logging in development
+const VERBOSE_LOGS = Deno.env.get('ENVIRONMENT') !== 'production';
+
+// Validate UUID format
+function isValidUUID(uuid: string): boolean {
+  const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  return uuidRegex.test(uuid);
+}
+
+// Validate base64 format
+function isValidBase64(str: string): boolean {
+  if (!str || str.trim() === '') return false;
+  try {
+    return btoa(atob(str)) === str;
+  } catch {
+    return false;
+  }
+}
+
+// Sleep utility for retry logic
+function sleep(ms: number): Promise<void> {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
+// Fetch with retry logic
+async function fetchWithRetry(
+  url: string, 
+  options: RequestInit, 
+  retries = MAX_RETRIES
+): Promise<Response> {
+  for (let attempt = 0; attempt < retries; attempt++) {
+    try {
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 10000); // 10s timeout
+      
+      const response = await fetch(url, {
+        ...options,
+        signal: controller.signal,
+      });
+      
+      clearTimeout(timeoutId);
+      
+      if (response.ok) {
+        return response;
+      }
+      
+      // Don't retry on client errors (4xx)
+      if (response.status >= 400 && response.status < 500) {
+        return response;
+      }
+      
+      // Retry on server errors (5xx)
+      if (attempt < retries - 1) {
+        console.log(`K-Tag API error (${response.status}), retrying... (${attempt + 1}/${retries})`);
+        await sleep(RETRY_DELAY_MS * (attempt + 1)); // Exponential backoff
+        continue;
+      }
+      
+      return response;
+    } catch (error) {
+      if (attempt < retries - 1) {
+        console.log(`K-Tag API request failed, retrying... (${attempt + 1}/${retries})`, error);
+        await sleep(RETRY_DELAY_MS * (attempt + 1));
+        continue;
+      }
+      throw error;
+    }
+  }
+  
+  throw new Error('Max retries exceeded');
+}
+
 serve(async (req) => {
   // Handle CORS preflight requests
   if (req.method === 'OPTIONS') {
@@ -24,9 +106,17 @@ serve(async (req) => {
 
     const { tagId } = await req.json();
     
+    // Validate UUID format
+    if (!tagId || !isValidUUID(tagId)) {
+      return new Response(
+        JSON.stringify({ error: 'ID da tag inválido' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    
     console.log('Query K-Tag API for tag:', tagId);
 
-    // Criar cliente Supabase com auth header
+    // Create Supabase client
     const supabaseClient = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_ANON_KEY') ?? '',
@@ -42,12 +132,69 @@ serve(async (req) => {
     if (authError || !user) {
       console.error('Authentication failed:', authError);
       return new Response(
-        JSON.stringify({ error: 'Unauthorized' }),
+        JSON.stringify({ error: 'Não autorizado' }),
         { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Buscar informações da tag
+    // Check rate limiting
+    const rateLimitCheck = await supabaseClient
+      .from('location_history')
+      .select('timestamp')
+      .eq('tag_id', tagId)
+      .order('timestamp', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (rateLimitCheck.data) {
+      const lastRequestTime = new Date(rateLimitCheck.data.timestamp).getTime();
+      const timeSinceLastRequest = Date.now() - lastRequestTime;
+      
+      if (timeSinceLastRequest < RATE_LIMIT_DURATION_MS) {
+        const waitTime = Math.ceil((RATE_LIMIT_DURATION_MS - timeSinceLastRequest) / 1000);
+        return new Response(
+          JSON.stringify({ 
+            error: `Aguarde ${waitTime} segundos antes de atualizar novamente`,
+            retryAfter: waitTime
+          }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // Check cache
+    const cacheCheck = await supabaseClient
+      .from('location_history')
+      .select('*')
+      .eq('tag_id', tagId)
+      .order('timestamp', { ascending: false })
+      .limit(1)
+      .single();
+
+    if (cacheCheck.data) {
+      const cacheTime = new Date(cacheCheck.data.timestamp).getTime();
+      const cacheAge = Date.now() - cacheTime;
+      
+      if (cacheAge < CACHE_DURATION_MS) {
+        console.log('Returning cached location (age:', Math.floor(cacheAge / 1000), 'seconds)');
+        return new Response(
+          JSON.stringify({ 
+            success: true, 
+            location: {
+              latitude: cacheCheck.data.latitude,
+              longitude: cacheCheck.data.longitude,
+              confidence: cacheCheck.data.confidence,
+              status_code: cacheCheck.data.status_code,
+              timestamp: cacheCheck.data.timestamp,
+            },
+            cached: true
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
+    // Fetch tag information
     const { data: tag, error: tagError } = await supabaseClient
       .from('tags')
       .select('*')
@@ -71,11 +218,32 @@ serve(async (req) => {
       );
     }
 
-    console.log('Tag found:', tag.name);
+    // Validate key formats
+    if (!tag.hashed_adv_key || !tag.private_key) {
+      return new Response(
+        JSON.stringify({ error: 'Chaves da tag inválidas ou ausentes' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
 
-    // Chamar API K-Tag
-    const ktagApiUrl = 'http://47.113.127.14:6176';
-    const ktagAuthHeader = 'Basic ' + btoa('TagLocation:a9B3xQ7z');
+    if (VERBOSE_LOGS) {
+      console.log('Tag found:', tag.name);
+    }
+
+    // Get K-Tag API credentials from environment
+    const ktagApiUrl = Deno.env.get('KTAG_API_URL');
+    const ktagUsername = Deno.env.get('KTAG_USERNAME');
+    const ktagPassword = Deno.env.get('KTAG_PASSWORD');
+
+    if (!ktagApiUrl || !ktagUsername || !ktagPassword) {
+      console.error('K-Tag API credentials not configured');
+      return new Response(
+        JSON.stringify({ error: 'Configuração da API não encontrada' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    const ktagAuthHeader = 'Basic ' + btoa(`${ktagUsername}:${ktagPassword}`);
 
     const payload = {
       accessoryId: tag.accessory_id,
@@ -83,9 +251,10 @@ serve(async (req) => {
       priv_keys: [tag.private_key]
     };
 
-    console.log('Calling K-Tag API with payload:', { accessoryId: tag.accessory_id });
+    console.log('Calling K-Tag API with accessoryId:', tag.accessory_id);
 
-    const ktagResponse = await fetch(ktagApiUrl, {
+    // Call K-Tag API with retry logic
+    const ktagResponse = await fetchWithRetry(ktagApiUrl, {
       method: 'POST',
       headers: {
         'Authorization': ktagAuthHeader,
@@ -95,17 +264,24 @@ serve(async (req) => {
     });
 
     if (!ktagResponse.ok) {
-      console.error('K-Tag API error:', ktagResponse.status, await ktagResponse.text());
+      const errorText = await ktagResponse.text();
+      console.error('K-Tag API error:', ktagResponse.status, errorText);
       return new Response(
-        JSON.stringify({ error: 'Erro ao consultar API K-Tag' }),
+        JSON.stringify({ 
+          error: 'Erro ao consultar API K-Tag',
+          details: ktagResponse.status === 401 ? 'Credenciais inválidas' : 'Erro de comunicação'
+        }),
         { status: ktagResponse.status, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
     const ktagData = await ktagResponse.json();
-    console.log('K-Tag API response:', ktagData);
+    
+    if (VERBOSE_LOGS) {
+      console.log('K-Tag API response received');
+    }
 
-    // Interpretar resposta corretamente - a API retorna um array 'results'
+    // Parse response
     const results = ktagData.results || [];
     
     if (!results || results.length === 0) {
@@ -113,14 +289,13 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: false, 
-          error: 'Nenhuma localização disponível',
-          rawResponse: ktagData 
+          error: 'Nenhuma localização disponível'
         }),
         { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
 
-    // Pegar o resultado mais recente (primeiro do array)
+    // Get latest report
     const latestReport = results[0];
     
     const location = {
@@ -133,9 +308,7 @@ serve(async (req) => {
         : new Date().toISOString(),
     };
 
-    console.log('Parsed location:', location);
-
-    // Salvar no histórico se temos lat/lon
+    // Save to history if we have coordinates
     if (location.latitude && location.longitude) {
       const { error: historyError } = await supabaseClient
         .from('location_history')
@@ -159,7 +332,7 @@ serve(async (req) => {
       JSON.stringify({ 
         success: true, 
         location,
-        rawResponse: ktagData 
+        cached: false
       }),
       { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
