@@ -85,7 +85,23 @@ export default function TagDetails() {
         toast.success("Localização atualizada!");
         fetchTag();
       } else {
-        toast.error("Não foi possível obter a localização");
+        // Enhanced error messaging
+        const message = data.message || "Não foi possível obter a localização";
+        const details = data.details;
+        
+        if (details?.reason === 'no_reports') {
+          toast.error(message, {
+            description: details.suggestion,
+            duration: 6000
+          });
+        } else if (details?.reason === 'invalid_keys') {
+          toast.error("Chaves inválidas", {
+            description: details.suggestion,
+            duration: 6000
+          });
+        } else {
+          toast.error(message);
+        }
       }
     } catch (error) {
       console.error("Error updating location:", error);
@@ -241,8 +257,30 @@ export default function TagDetails() {
               ) : (
                 <div className="text-center py-8 text-muted-foreground">
                   <Signal className="h-12 w-12 mx-auto mb-3 opacity-50" />
-                  <p>Nenhuma localização registrada</p>
-                  <p className="text-sm mt-2">Clique em "Atualizar Agora" para consultar</p>
+                  <p className="font-semibold">Aguardando primeiro relatório</p>
+                  <p className="text-sm mt-2">
+                    {(() => {
+                      const ageMs = Date.now() - new Date(tag.created_at).getTime();
+                      const ageHours = Math.floor(ageMs / (1000 * 60 * 60));
+                      
+                      if (ageHours < 1) {
+                        return 'Tag recém-criada. Pode levar algumas horas para a primeira detecção.';
+                      } else if (ageHours < 24) {
+                        return `Tag criada há ${ageHours} hora${ageHours > 1 ? 's' : ''}. Continue tentando atualizar periodicamente.`;
+                      } else {
+                        return 'Verifique se a tag está ativa e em área com dispositivos Apple.';
+                      }
+                    })()}
+                  </p>
+                  <Button 
+                    onClick={updateLocation} 
+                    disabled={updating}
+                    variant="outline" 
+                    className="mt-4"
+                  >
+                    <RefreshCw className={`mr-2 h-4 w-4 ${updating ? 'animate-spin' : ''}`} />
+                    {updating ? 'Consultando...' : 'Tentar Consultar'}
+                  </Button>
                 </div>
               )}
             </CardContent>
@@ -268,10 +306,48 @@ export default function TagDetails() {
                   {tag.status}
                 </Badge>
               </div>
+              {tag.vehicle_type && (
+                <>
+                  <div className="flex items-center justify-between">
+                    <span className="text-muted-foreground">Tipo de Veículo:</span>
+                    <span>{tag.vehicle_type}</span>
+                  </div>
+                  {tag.license_plate && (
+                    <div className="flex items-center justify-between">
+                      <span className="text-muted-foreground">Placa:</span>
+                      <span className="font-mono">{tag.license_plate}</span>
+                    </div>
+                  )}
+                </>
+              )}
               <div className="flex items-center justify-between pt-3 border-t">
                 <span className="text-muted-foreground">Cadastrado em:</span>
                 <span className="text-sm">
-                  {new Date(tag.created_at).toLocaleDateString('pt-BR')}
+                  {new Date(tag.created_at).toLocaleDateString('pt-BR', {
+                    day: '2-digit',
+                    month: '2-digit',
+                    year: 'numeric',
+                    hour: '2-digit',
+                    minute: '2-digit'
+                  })}
+                </span>
+              </div>
+              <div className="flex items-center justify-between">
+                <span className="text-muted-foreground">Idade da Tag:</span>
+                <span className="text-sm">
+                  {(() => {
+                    const ageMs = Date.now() - new Date(tag.created_at).getTime();
+                    const ageHours = Math.floor(ageMs / (1000 * 60 * 60));
+                    const ageDays = Math.floor(ageHours / 24);
+                    
+                    if (ageDays > 0) {
+                      return `${ageDays} dia${ageDays > 1 ? 's' : ''}`;
+                    } else if (ageHours > 0) {
+                      return `${ageHours} hora${ageHours > 1 ? 's' : ''}`;
+                    } else {
+                      return 'Menos de 1 hora';
+                    }
+                  })()}
                 </span>
               </div>
             </CardContent>
